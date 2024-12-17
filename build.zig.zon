@@ -4,6 +4,6 @@
     .paths = .{
         "build.zig",
         "rem.zig",
-        "source",
+        "src",
     },
 }

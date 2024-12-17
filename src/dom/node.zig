@@ -449,7 +449,7 @@ pub const ElementType = enum {
             .{ "select", .html_select },
             .{ "slot", .html_slot },
             .{ "small", .html_small },
-            .{ "source", .html_source },
+            .{ "src", .html_source },
             .{ "span", .html_span },
             .{ "strong", .html_strong },
             .{ "style", .html_style },

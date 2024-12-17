@@ -1,36 +1,6 @@
-# rem
-rem is an HTML5 parser written in [Zig](https://ziglang.org).
+# hbml-html-parser
+a fork of rem is an HTML5 parser written in [Zig](https://ziglang.org).
 
-## About
-### Features
-- [x] An HTML5 parser consisting of a tokenizer (complete) and a tree constructor (works "well enough")
-- [x] A minimal DOM implementation
-- [x] HTML fragment parsing
-- [x] Tested by [html5lib-tests](https://github.com/chadwain/html5lib-tests)
-
-### Things to be improved
-- [ ] Better DOM functionality
-- [ ] Support for more character encodings
-- [ ] Support for Javascript
-
-### Why create this?
-* To understand what it takes "implement" HTML, even if just a small portion of it. As I discovered, even just trying to parse an HTML file _correctly_ can be quite challenging.
-* To learn more about web standards in general. Reading the HTML spec naturally causes (or rather, forces) one to learn about DOM (especially), SVG, CSS, and many others.
-* For use in other projects, and to be useful to others.
-
-### Lastly...
-rem is still a work in progress. Not all the features of a fully-capable HTML5 parser are implemented.
-
-## Get the code
-Clone the repository like this:
-```
-git clone --recursive --config core.autocrlf=false https://github.com/chadwain/rem.git
-```
-
-There are no dependencies other than a Zig compiler. Note that this library is only compatible with Zig version 0.11.0 or newer.
-
-## Use the code
-Here's an example of using the parser. You can see the output of this program by running `zig build example`.
 
 ```zig
 const std = @import("std");
@@ -78,6 +48,7 @@ The expected results are as follows:
 - tokenizer: All tests pass.
 - tree-construction (scripting disabled): Some tests are skipped because they rely on HTML features that aren't yet implemented in this library (specifically, templates). All other tests pass.
 - tree-construction (scripting enabled): Similar to testing with scripting off, but in addition, some entire test files are skipped because they would cause panics.
+
 
 ## License
 ### GPL-3.0-only

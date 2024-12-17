@@ -90,7 +90,7 @@ pub fn build(b: *Build) void {
 
     {
         const json_data = b.pathFromRoot("tools/character_reference_data.json");
-        const output_path = b.pathFromRoot("source/named_characters.zig");
+        const output_path = b.pathFromRoot("src/named_characters.zig");
         const generate_named_characters = b.addExecutable(.{
             .name = "generate-named-characters",
             .root_source_file = b.path("tools/generate_named_characters.zig"),
