@@ -83,7 +83,7 @@ pub fn startsWithIgnoreCase2(haystack: []const u8, needle: []const u8) bool {
     return if (needle.len > haystack.len) false else eqlIgnoreCase2(haystack[0..needle.len], needle);
 }
 
-pub fn utf8DecodeStringComptimeLen(comptime string: []const u8) usize {
+pub fn utf8DecodeStringLen(string: []const u8) usize {
     var i: usize = 0;
     var decoded_len: usize = 0;
     while (i < string.len) {
@@ -93,8 +93,8 @@ pub fn utf8DecodeStringComptimeLen(comptime string: []const u8) usize {
     return decoded_len;
 }
 
-pub fn utf8DecodeStringComptime(comptime string: []const u8) [utf8DecodeStringComptimeLen(string)]u21 {
-    var result: [utf8DecodeStringComptimeLen(string)]u21 = undefined;
+pub fn utf8DecodeString(comptime string: []const u8) [utf8DecodeStringLen(string)]u21 {
+    var result: [utf8DecodeStringLen(string)]u21 = undefined;
     if (result.len == 0) return result;
     var decoded_it = std.unicode.Utf8View.initComptime(string).iterator();
     var i: usize = 0;

@@ -1,10 +1,14 @@
 # hbml-html-parser
-a fork of rem is an HTML5 parser written in [Zig](https://ziglang.org).
+
+A fork of rem is an HTML5 parser written in [Zig](https://ziglang.org).
+
+This fork is for the HBML compiler 
 
 
+## How to use the parser:
 ```zig
 const std = @import("std");
-const rem = @import("rem");
+const rem = @import("html_parser");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
