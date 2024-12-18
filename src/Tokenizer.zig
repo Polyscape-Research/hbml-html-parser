@@ -244,18 +244,18 @@ fn checkInputCharacterForErrors(tokenizer: *Tokenizer, character: u21) !void {
 /// Scans the next characters in the input stream to see if they are equal to `string`.
 /// If so, consumes those characters and returns `true`. Otherwise, adds any read characters
 /// to the list of replayed characters and returns `false`.
-fn consumeCharsIfEql(tokenizer: *Tokenizer, comptime string: []const u8) bool {
-    const decoded_string = try rem.util.utf8DecodeString(string);
-    return consumeCharsIfEqlGeneric(tokenizer, &decoded_string, caseSensitiveEql);
+fn consumeCharsIfEql(tokenizer: *Tokenizer, string: []const u8) bool {
+    const decoded_string = rem.util.utf8DecodeString(string) catch return false;
+    return consumeCharsIfEqlGeneric(tokenizer, decoded_string, caseSensitiveEql);
 }
 
 /// Scans the next characters in the input stream to see if they are equal to `string` in
 /// a case-insensitive manner.
 /// If so, consumes those characters and returns `true`. Otherwise, adds any read characters
 /// to the list of replayed characters and returns `false`.
-fn consumeCharsIfCaseInsensitiveEql(tokenizer: *Tokenizer, comptime string: []const u8) bool {
-    const decoded_string = try rem.util.utf8DecodeString(string);
-    return consumeCharsIfEqlGeneric(tokenizer, &decoded_string, caseInsensitiveEql);
+fn consumeCharsIfCaseInsensitiveEql(tokenizer: *Tokenizer, string: []const u8) bool {
+    const decoded_string = rem.util.utf8DecodeString(string) catch return false;
+    return consumeCharsIfEqlGeneric(tokenizer, decoded_string, caseInsensitiveEql);
 }
 
 fn consumeCharsIfEqlGeneric(tokenizer: *Tokenizer, decoded_string: []const u21, comptime eqlFn: fn (u21, u21) bool) bool {
