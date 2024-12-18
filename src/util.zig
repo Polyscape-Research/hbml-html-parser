@@ -93,10 +93,11 @@ pub fn utf8DecodeStringLen(string: []const u8) usize {
     return decoded_len;
 }
 
-pub fn utf8DecodeString(comptime string: []const u8) [utf8DecodeStringLen(string)]u21 {
-    var result: [utf8DecodeStringLen(string)]u21 = undefined;
+pub fn utf8DecodeString(string: []const u8) ![]const u21 {
+    var result: []u21 = undefined;
     if (result.len == 0) return result;
-    var decoded_it = std.unicode.Utf8View.initComptime(string).iterator();
+    const decoded = try std.unicode.Utf8View.init(string);
+    var decoded_it = decoded.iterator();
     var i: usize = 0;
     while (decoded_it.nextCodepoint()) |codepoint| {
         result[i] = codepoint;

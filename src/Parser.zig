@@ -253,6 +253,7 @@ pub fn run(self: *Self) !void {
             error.OutOfMemory,
             error.Utf8CannotEncodeSurrogateHalf,
             error.CodepointTooLarge,
+            error.InvalidUtf8,
             => |e| return e,
         };
 
@@ -353,7 +354,7 @@ pub fn errors(self: Self) []const ParseError {
 
 test "Parser usage" {
     const string = "<!doctype html><html>asdf</body hello=world>";
-    const input = &rem.util.utf8DecodeStringComptime(string);
+    const input = try rem.util.utf8DecodeString(string);
     const allocator = std.testing.allocator;
 
     var dom = Dom{ .allocator = allocator };
@@ -366,7 +367,7 @@ test "Parser usage" {
 
 test "Parser usage, fragment case" {
     const string = "<span class=pizza>tacos</span>";
-    const input = &rem.util.utf8DecodeStringComptime(string);
+    const input = try rem.util.utf8DecodeString(string);
     const allocator = std.testing.allocator;
 
     var dom = Dom{ .allocator = allocator };

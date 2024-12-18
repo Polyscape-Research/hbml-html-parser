@@ -245,7 +245,7 @@ fn checkInputCharacterForErrors(tokenizer: *Tokenizer, character: u21) !void {
 /// If so, consumes those characters and returns `true`. Otherwise, adds any read characters
 /// to the list of replayed characters and returns `false`.
 fn consumeCharsIfEql(tokenizer: *Tokenizer, comptime string: []const u8) bool {
-    const decoded_string = rem.util.utf8DecodeStringComptime(string);
+    const decoded_string = try rem.util.utf8DecodeString(string);
     return consumeCharsIfEqlGeneric(tokenizer, &decoded_string, caseSensitiveEql);
 }
 
@@ -254,7 +254,7 @@ fn consumeCharsIfEql(tokenizer: *Tokenizer, comptime string: []const u8) bool {
 /// If so, consumes those characters and returns `true`. Otherwise, adds any read characters
 /// to the list of replayed characters and returns `false`.
 fn consumeCharsIfCaseInsensitiveEql(tokenizer: *Tokenizer, comptime string: []const u8) bool {
-    const decoded_string = rem.util.utf8DecodeStringComptime(string);
+    const decoded_string = try rem.util.utf8DecodeString(string);
     return consumeCharsIfEqlGeneric(tokenizer, &decoded_string, caseInsensitiveEql);
 }
 
@@ -284,7 +284,7 @@ fn emitCharacter(tokenizer: *Tokenizer, character: u21) !void {
 }
 
 fn emitString(tokenizer: *Tokenizer, comptime string: []const u8) !void {
-    for (rem.util.utf8DecodeStringComptime(string)) |character| {
+    for (try rem.util.utf8DecodeString(string)) |character| {
         try emitCharacter(tokenizer, character);
     }
 }

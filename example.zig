@@ -14,7 +14,7 @@ pub fn main() !void {
     // This is the text that will be read by the parser.
     // Since the parser accepts Unicode codepoints, the text must be decoded before it can be used.
     const input = "<!doctype html><html><h1 style=bold>Your text goes here!</h1>";
-    const decoded_input = &rem.util.utf8DecodeStringComptime(input);
+    const decoded_input = try rem.util.utf8DecodeString(input);
 
     // Create the DOM in which the parsed Document will be created.
     var dom = rem.Dom{ .allocator = allocator };
