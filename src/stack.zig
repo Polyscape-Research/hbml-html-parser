@@ -39,6 +39,11 @@ pub const Element = struct {
     }
 
     pub fn deinit(self: *Element) void {
+        for (0..self.children.items.len) |index| {
+            var child = self.children.items[index];
+            child.deinit();
+        }
+
         self.children.deinit();
         self.text.deinit();
         self.attrabutes.deinit();
@@ -68,6 +73,18 @@ pub const Element = struct {
         return bottom;
     }
 
+    /// Finds the bottom of the tree without regards to termination
+    /// e.g. <div><p> </p></div> would find <p> as div hasnt been terminated yet
+    pub fn find_bottom_nt(self: *Element) *Element {
+        if (self.children.items.len == 0) {
+            return self;
+        }
+
+        const bottom: *Element = self.children.items[self.children.items.len - 1].find_bottom();
+
+        return bottom;
+    }
+
     /// Finds the top of the tree
     pub fn find_top(self: *Element) *Element {
         if (self.parent != null) {
@@ -80,16 +97,73 @@ pub const Element = struct {
 
 pub const TextAllocation = struct { text: []const u8, allocated_index: i32 };
 
-test "Find bottom" {
+test "Find bottom 1" {
     const allocator = std.testing.allocator;
 
     var element = try Element.init(allocator, "dom", null);
+    defer element.deinit();
+
     var div = try Element.init_child("div", &element);
     const p = try Element.init_child("p", &div);
 
-    try element.push_child(div);
     try div.push_child(p);
+    try element.push_child(div);
 
     const bottom = element.find_bottom();
+    try std.testing.expectEqual("p", bottom.identifier);
+}
+
+test "Find bottom 2" {
+    const allocator = std.testing.allocator;
+
+    var element = try Element.init(allocator, "dom", null);
+    defer element.deinit();
+
+    var div = try Element.init_child("div", &element);
+    var p = try Element.init_child("p", &div);
+    p.terminated = true;
+
+    try div.push_child(p);
+    try element.push_child(div);
+
+    const bottom = element.find_bottom();
+    try std.testing.expectEqual("div", bottom.identifier);
+}
+
+test "Find bottom 3" {
+    const allocator = std.testing.allocator;
+
+    var element = try Element.init(allocator, "dom", null);
+    defer element.deinit();
+
+    var div = try Element.init_child("div", &element);
+    var p = try Element.init_child("p", &div);
+    p.terminated = true;
+
+    const span = try Element.init_child("span", &div);
+
+    try div.push_child(p);
+    try div.push_child(span);
+    try element.push_child(div);
+
+    const bottom = element.find_bottom();
+    try std.testing.expectEqual("span", bottom.identifier);
+}
+
+test "Find bottom nt 1" {
+    const allocator = std.testing.allocator;
+
+    var element = try Element.init(allocator, "dom", null);
+    defer element.deinit();
+
+    var div = try Element.init_child("div", &element);
+    var p = try Element.init_child("p", &div);
+    p.terminated = true;
+
+    try div.push_child(p);
+    try element.push_child(div);
+
+    const bottom = element.find_bottom_nt();
+    std.debug.print("bottom: {s}\n", .{bottom.identifier});
     try std.testing.expectEqual("p", bottom.identifier);
 }
