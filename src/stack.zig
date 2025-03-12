@@ -9,12 +9,12 @@ pub const Element = struct {
     identifier: [*:0]const u8,
     terminated: bool,
     text: std.ArrayList(TextAllocation),
-    parent: ?*const Element,
+    parent: ?*Element,
     children: std.ArrayList(Element),
     attrabutes: std.ArrayList(Attrabute),
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, identifier: [*:0]const u8, parent: ?*const Element) !Element {
+    pub fn init(allocator: std.mem.Allocator, identifier: [*:0]const u8, parent: ?*Element) !Element {
         return .{
             .identifier = identifier,
             .terminated = false,
@@ -26,7 +26,7 @@ pub const Element = struct {
         };
     }
 
-    pub fn init_child(identifier: [*:0]const u8, parent: *const Element) !Element {
+    pub fn init_child(identifier: [*:0]const u8, parent: *Element) !Element {
         return .{
             .identifier = identifier,
             .terminated = false,
@@ -80,7 +80,7 @@ pub const Element = struct {
             return self;
         }
 
-        const bottom: *Element = self.children.items[self.children.items.len - 1].find_bottom();
+        const bottom: *Element = self.children.items[self.children.items.len - 1].find_bottom_nt();
 
         return bottom;
     }
@@ -164,6 +164,46 @@ test "Find bottom nt 1" {
     try element.push_child(div);
 
     const bottom = element.find_bottom_nt();
-    std.debug.print("bottom: {s}\n", .{bottom.identifier});
     try std.testing.expectEqual("p", bottom.identifier);
+}
+
+test "Find bottom nt 2" {
+    const allocator = std.testing.allocator;
+
+    var element = try Element.init(allocator, "dom", null);
+    defer element.deinit();
+
+    var div = try Element.init_child("div", &element);
+    var p = try Element.init_child("p", &div);
+    p.terminated = true;
+
+    const p2 = try Element.init_child("p2", &div);
+
+    try div.push_child(p);
+    try div.push_child(p2);
+    try element.push_child(div);
+
+    const bottom = element.find_bottom_nt();
+    try std.testing.expectEqual("p2", bottom.identifier);
+}
+
+test "Find Top 1" {
+    const allocator = std.testing.allocator;
+
+    var element = try Element.init(allocator, "dom", null);
+    defer element.deinit();
+
+    var div = try Element.init_child("div", &element);
+    var span = try Element.init_child("span", &div);
+    var p = try Element.init_child("p", &span);
+
+    try span.push_child(p);
+    try div.push_child(span);
+    try element.push_child(div);
+
+    const top1 = p.find_top();
+    try std.testing.expectEqual("dom", top1.identifier);
+
+    const top2 = span.find_top();
+    try std.testing.expectEqual("dom", top2.identifier);
 }
