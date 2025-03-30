@@ -1,12 +1,12 @@
 const std = @import("std");
 
 pub const Attrabute = struct {
-    identifier: [*:0]const u8,
-    value_text: [*:0]const u8,
+    identifier: []const u8,
+    value_text: []const u8,
 };
 
 pub const Element = struct {
-    identifier: [*:0]const u8,
+    identifier: []const u8,
     terminated: bool,
     text: std.ArrayList(TextAllocation),
     parent: ?*Element,
@@ -14,7 +14,7 @@ pub const Element = struct {
     attrabutes: std.ArrayList(Attrabute),
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, identifier: [*:0]const u8, parent: ?*Element) !Element {
+    pub fn init(allocator: std.mem.Allocator, identifier: []const u8, parent: ?*Element) !Element {
         return .{
             .identifier = identifier,
             .terminated = false,
@@ -26,7 +26,7 @@ pub const Element = struct {
         };
     }
 
-    pub fn init_child(identifier: [*:0]const u8, parent: *Element) !Element {
+    pub fn init_child(identifier: []const u8, parent: *Element) !Element {
         return .{
             .identifier = identifier,
             .terminated = false,
