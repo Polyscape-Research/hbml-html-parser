@@ -145,6 +145,11 @@ pub fn parseHtml(file_bytes: []const u8, allocator: std.mem.Allocator) !stack.El
 
         if (state_machine.attrabute_value_decleration and !state_machine.expect_value and (char == '\'' or char == '"')) {
             state_machine.expect_value = true;
+            continue;
+        }
+
+        if (state_machine.attrabute_decleration and state_machine.expect_value and (char != '\'' or char != '"')) {
+            state_machine.value_string_builder.concat_byte(char);
         }
 
         prev_char = char;
