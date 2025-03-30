@@ -25,6 +25,9 @@ const StateMachine = struct {
     element_block: bool = false,
     element_decleration: bool = false,
     attrabute_decleration: bool = false,
+    attrabute_value_decleration: bool = false,
+    expect_value: bool = false,
+    value_string_builder: sb.StringBuilder,
     string_builder: sb.StringBuilder,
     allocator: std.mem.Allocator,
 
@@ -32,11 +35,12 @@ const StateMachine = struct {
         return .{
             .allocator = allocator,
             .string_builder = sb.StringBuilder.init(allocator, "", .multi, null),
+            .value_string_builder = sb.StringBuilder.init(allocator, "", .multi, null),
         };
     }
 
     pub fn emit_whitespace(self: *StateMachine) bool {
-        return !self.text_block and !self.element_decleration and !self.attrabute_decleration and !self.element_block;
+        return !self.text_block and !self.expect_value and !self.element_decleration and !self.attrabute_decleration and !self.attrabute_value_decleration and !self.element_block;
     }
 
     pub fn emit_element(self: *StateMachine, current_element: *stack.Element) stack.Element {
@@ -111,6 +115,7 @@ pub fn parseHtml(file_bytes: []const u8, allocator: std.mem.Allocator) !stack.El
 
         // Elements
 
+        // TODO do this better
         if (state_machine.element_block and !state_machine.element_decleration and char == '/') {
             current_element.terminated = true;
             current_element = current_element.parent;
@@ -133,7 +138,14 @@ pub fn parseHtml(file_bytes: []const u8, allocator: std.mem.Allocator) !stack.El
             state_machine.string_builder.concat_byte(char);
         }
 
-        if (state_machine.attrabute_decleration and char == '=') {}
+        if (state_machine.attrabute_decleration and char == '=') {
+            state_machine.attrabute_value_decleration = true;
+            continue;
+        }
+
+        if (state_machine.attrabute_value_decleration and !state_machine.expect_value and (char == '\'' or char == '"')) {
+            state_machine.expect_value = true;
+        }
 
         prev_char = char;
     }
