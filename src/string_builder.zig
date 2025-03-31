@@ -43,6 +43,9 @@ pub const StringBuilder = struct {
         self.allocator.free(self.string);
         for (self.string_allocations.items) |allocation| {
             // WHY ZIG WHY...
+            // FIX: Change back to the old way by returning a slice and on the stack we state if the string needs to be freed
+            // Instead of having to free all values slices produced by the string builder the string builder
+            // maybe we do free all values from the string builder so maybe a function to state that it needs to be?
             self.allocator.free(@as(*[]u8, @ptrFromInt(allocation)));
         }
         self.string_allocations.deinit();
