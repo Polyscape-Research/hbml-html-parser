@@ -10,6 +10,7 @@ pub const StringBuilder = struct {
     position: usize,
     expand_len: usize = 128,
     string: []u8,
+    string_allocations: std.ArrayList(usize),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, starting_string: []const u8, alloc_option: StringBuilderAlloc, expand_len: ?usize) !StringBuilder {
@@ -31,6 +32,7 @@ pub const StringBuilder = struct {
         return .{
             .alloc_option = alloc_option,
             .string = string_alloc,
+            .string_allocations = std.ArrayList(usize).init(allocator),
             .allocator = allocator,
             .position = position,
             .expand_len = expand_len orelse 128,
@@ -39,6 +41,11 @@ pub const StringBuilder = struct {
 
     pub fn deinit(self: *StringBuilder) void {
         self.allocator.free(self.string);
+        for (self.string_allocations.items) |allocation| {
+            // WHY ZIG WHY...
+            self.allocator.free(@as(*[]u8, @ptrFromInt(allocation)));
+        }
+        self.string_allocations.deinit();
     }
 
     pub fn expand(self: *StringBuilder, amount_needed: ?usize) !void {
@@ -99,7 +106,18 @@ pub const StringBuilder = struct {
     }
 
     pub fn to_string(self: *StringBuilder) ![]const u8 {
-        return self.string[0..self.position];
+        //var new_string = try self.allocator.alloc(u8, self.position);
+
+        //for (self.string[0..self.position], 0..) |byte, index| {
+        //    new_string[index] = byte;
+        //}
+
+        //const ptn = @intFromPtr(&new_string);
+        //self.string_allocations.push(ptn);
+        const string = try std.fmt.allocPrint(self.allocator, "{s}", .{self.string[0..self.position]});
+        try self.string_allocations.append(@intFromPtr(&string));
+
+        return string;
     }
 };
 
@@ -221,5 +239,22 @@ test "concat_byte StringBuilder" {
     const eql = std.mem.eql(u8, "123456", try sb.to_string());
     const end = std.time.milliTimestamp() - start;
     std.debug.print("time taken: {d}ms\n", .{end});
+    try std.testing.expectEqual(eql, true);
+}
+
+test "clear StringBuilder" {
+    const t_alloc = std.testing.allocator;
+
+    var sb =
+        try StringBuilder.init(t_alloc, "", .inc, 5);
+    defer sb.deinit();
+
+    try sb.concat_string("hello");
+    var eql = std.mem.eql(u8, "hello", try sb.to_string());
+    try std.testing.expectEqual(eql, true);
+
+    sb.clear();
+    try sb.concat_string("bye");
+    eql = std.mem.eql(u8, "bye", try sb.to_string());
     try std.testing.expectEqual(eql, true);
 }
