@@ -22,8 +22,6 @@ pub const StringBuilder = struct {
             position = string_alloc.len;
         } else {
             @branchHint(.likely);
-            @memset(string_alloc, 0x0);
-
             for (starting_string, 0..) |byte, index| {
                 string_alloc[index] = byte;
                 position += 1;
@@ -50,6 +48,7 @@ pub const StringBuilder = struct {
             string_alloc =
                 try self.allocator.alloc(u8, @max(amount_needed orelse 0, self.expand_len) + self.string.len);
         } else {
+            // logic for multiplication allocation
             var amount = (amount_needed orelse 0) + self.string.len;
             const muli_amount = self.string.len * 2;
 
@@ -65,7 +64,7 @@ pub const StringBuilder = struct {
             if (index < self.string.len) {
                 string_alloc[index] = self.string[index];
             } else {
-                string_alloc[index] = 0x0;
+                break;
             }
         }
 
@@ -193,13 +192,14 @@ test "concat_string with large strings" {
     try sb.concat_string(&x);
     try sb.concat_string(&x);
     try sb.concat_string(&x);
+    try sb.concat_string(&x);
 
     const string = try sb.to_string();
 
     const end = std.time.milliTimestamp() - start;
     std.debug.print("time taken: {d}ms\n", .{end});
 
-    const eql = std.mem.eql(u8, "hello" ++ x ++ x ++ x ++ x ++ x ++ x ++ x ++ x, string);
+    const eql = std.mem.eql(u8, "hello" ++ x ++ x ++ x ++ x ++ x ++ x ++ x ++ x ++ x, string);
     try std.testing.expectEqual(eql, true);
 }
 

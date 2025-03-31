@@ -6,11 +6,11 @@ const Token = packed struct {
     token: u8,
     term_token: u8,
 
-    pub fn eql(self: *Token, char: u8) bool {
+    pub fn eql(self: *const Token, char: u8) bool {
         return self.token == char;
     }
 
-    pub fn eql_term(self: *Token, char: u8) bool {
+    pub fn eql_term(self: *const Token, char: u8) bool {
         return self.term_token == char;
     }
 
@@ -27,43 +27,63 @@ const StateMachine = struct {
     attrabute_decleration: bool = false,
     attrabute_value_decleration: bool = false,
     expect_value: bool = false,
+    current_value_delimiter: u8 = 0x0,
     value_string_builder: sb.StringBuilder,
     string_builder: sb.StringBuilder,
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) StateMachine {
+    pub fn init(allocator: std.mem.Allocator) !StateMachine {
         return .{
             .allocator = allocator,
-            .string_builder = sb.StringBuilder.init(allocator, "", .multi, null),
-            .value_string_builder = sb.StringBuilder.init(allocator, "", .multi, null),
+            .string_builder = try sb.StringBuilder.init(allocator, "", .multi, null),
+            .value_string_builder = try sb.StringBuilder.init(allocator, "", .multi, null),
         };
+    }
+
+    pub fn deinit(self: *StateMachine) void {
+        self.string_builder.deinit();
+        self.value_string_builder.deinit();
     }
 
     pub fn emit_whitespace(self: *StateMachine) bool {
         return !self.text_block and !self.expect_value and !self.element_decleration and !self.attrabute_decleration and !self.attrabute_value_decleration and !self.element_block;
     }
 
-    pub fn emit_element(self: *StateMachine, current_element: *stack.Element) stack.Element {
+    pub fn emit_element(self: *StateMachine, current_element: *stack.Element) !stack.Element {
         const element = try self.string_builder.to_string();
         self.string_builder.clear();
-        const child = try current_element.init_child(element, current_element);
-        current_element.push_child(child);
+        const child = try stack.Element.init_child(element, current_element);
         return child;
     }
 
-    pub fn emit_attrabute(self: *StateMachine) stack.Attrabute {
+    pub fn emit_attrabute(self: *StateMachine) !stack.Attrabute {
         const attrabute = try self.string_builder.to_string();
         self.string_builder.clear();
         return .{ .identifier = attrabute, .value_text = "" };
     }
 
-    pub fn allowed_char(char: u8) bool {
-        // a-zA-Z
-        return (char >= 0x41 and char <= 0x5A) or (char >= 0x61 and char <= 0x7A);
+    pub fn emit_attrabute_value(self: *StateMachine, current_attrabute: ?stack.Attrabute) ?stack.Attrabute {
+        self.current_value_delimiter = 0x0;
+        self.expect_value = false;
+        self.attrabute_value_decleration = false;
+        self.attrabute_decleration = false;
+
+        var new_attrabute = current_attrabute;
+
+        if (new_attrabute != null) {
+            new_attrabute.?.value_text = try self.value_string_builder.to_string();
+        }
+
+        return new_attrabute;
     }
 };
 
-pub fn parseHtml(file_bytes: []const u8, allocator: std.mem.Allocator) !stack.Element {
+fn allowed_char_check(char: u8) bool {
+    // a-zA-Z
+    return (char >= 0x41 and char <= 0x5A) or (char >= 0x61 and char <= 0x7A);
+}
+
+pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine, allocator: std.mem.Allocator) !stack.Element {
     var dom = try stack.Element.init(allocator, "dom", null);
 
     //const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
@@ -73,8 +93,6 @@ pub fn parseHtml(file_bytes: []const u8, allocator: std.mem.Allocator) !stack.El
     //const file_bytes: []const u8 = try file.readToEndAlloc(allocator, @intCast(file_len));
     //defer allocator.free(file_bytes);
 
-    var state_machine = StateMachine{};
-
     var prev_char: ?u8 = undefined;
 
     var current_element: *stack.Element = &dom;
@@ -83,12 +101,7 @@ pub fn parseHtml(file_bytes: []const u8, allocator: std.mem.Allocator) !stack.El
     for (file_bytes, 0..) |char, index| {
         _ = index;
 
-        const allowed_char = state_machine.allowed_char(char);
-
-        if (state_machine.emit_whitespace()) {
-            @branchHint(.likely);
-            continue;
-        }
+        const allowed_char = allowed_char_check(char);
 
         if (!state_machine.element_block and Token.Tokens[0].eql(char)) {
             @branchHint(.likely);
@@ -101,10 +114,14 @@ pub fn parseHtml(file_bytes: []const u8, allocator: std.mem.Allocator) !stack.El
             @branchHint(.likely);
 
             if (state_machine.element_decleration) {
-                current_element = state_machine.emit_element(&current_element);
+                var element = try state_machine.emit_element(current_element);
+                try current_element.push_child(element);
+                current_element = &element;
             } else if (state_machine.attrabute_decleration) {
-                current_attrabute = state_machine.emit_attrabute();
-                current_element.push_attrabute(current_attrabute);
+                current_attrabute = try state_machine.emit_attrabute();
+                if (current_attrabute != null) {
+                    try current_element.push_attrabute(current_attrabute.?);
+                }
             }
 
             state_machine.element_block = false;
@@ -114,20 +131,23 @@ pub fn parseHtml(file_bytes: []const u8, allocator: std.mem.Allocator) !stack.El
         }
 
         // Elements
-
-        // TODO do this better
         if (state_machine.element_block and !state_machine.element_decleration and char == '/') {
             current_element.terminated = true;
-            current_element = current_element.parent;
+            if (current_element.parent) |parent| {
+                current_element = parent;
+            }
+            continue;
         }
 
         if (state_machine.element_block and state_machine.element_decleration and allowed_char) {
-            state_machine.string_builder.concat_byte(char);
+            try state_machine.string_builder.concat_byte(char);
             continue;
         }
 
         if (state_machine.element_decleration and !allowed_char) {
-            current_element = state_machine.emit_element(&current_element);
+            var element = try state_machine.emit_element(current_element);
+            try current_element.push_child(element);
+            current_element = &element;
             state_machine.element_decleration = false;
         }
 
@@ -135,23 +155,63 @@ pub fn parseHtml(file_bytes: []const u8, allocator: std.mem.Allocator) !stack.El
 
         if ((state_machine.attrabute_decleration and allowed_char) or (state_machine.element_block and !state_machine.element_decleration and allowed_char)) {
             state_machine.attrabute_decleration = true;
-            state_machine.string_builder.concat_byte(char);
+            try state_machine.string_builder.concat_byte(char);
         }
 
         if (state_machine.attrabute_decleration and char == '=') {
+            current_attrabute = stack.Attrabute{ .identifier = try state_machine.string_builder.to_string(), .value_text = "" };
+            state_machine.string_builder.clear();
             state_machine.attrabute_value_decleration = true;
             continue;
         }
 
         if (state_machine.attrabute_value_decleration and !state_machine.expect_value and (char == '\'' or char == '"')) {
             state_machine.expect_value = true;
+            state_machine.current_value_delimiter = char;
             continue;
         }
 
-        if (state_machine.attrabute_decleration and state_machine.expect_value and (char != '\'' or char != '"')) {
-            state_machine.value_string_builder.concat_byte(char);
+        if (state_machine.attrabute_value_decleration and state_machine.expect_value and (char != state_machine.current_value_delimiter)) {
+            try state_machine.value_string_builder.concat_byte(char);
+        }
+
+        if (state_machine.attrabute_value_decleration and state_machine.expect_value and (char == state_machine.current_value_delimiter)) {
+            current_attrabute = state_machine.emit_attrabute_value(current_attrabute);
+
+            if (current_attrabute) |attrabute| {
+                try current_element.push_attrabute(attrabute);
+            }
+
+            continue;
+        }
+
+        if (state_machine.emit_whitespace()) {
+            @branchHint(.likely);
+            continue;
         }
 
         prev_char = char;
     }
+
+    dom.terminated = true;
+
+    return dom;
+}
+
+test "Basic Entry Element Parse" {
+    const ts_allocator = std.testing.allocator;
+
+    var state_machine = try StateMachine.init(ts_allocator);
+    defer state_machine.deinit();
+
+    var parsedDom = try parseHtml("<div></div2>", &state_machine, ts_allocator);
+    defer parsedDom.deinit();
+
+    try std.testing.expect(std.mem.eql(u8, "dom", parsedDom.identifier));
+
+    try std.testing.expect(parsedDom.children.items.len > 0);
+
+    const div = parsedDom.find_bottom_nt();
+    std.debug.print("Bottom: {s}\n", .{div.identifier});
+    try std.testing.expect(std.mem.eql(u8, div.identifier, "div"));
 }
