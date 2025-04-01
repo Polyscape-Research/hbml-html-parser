@@ -10,7 +10,6 @@ pub const StringBuilder = struct {
     position: usize,
     expand_len: usize = 128,
     string: []u8,
-    string_allocations: std.ArrayList(usize),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, starting_string: []const u8, alloc_option: StringBuilderAlloc, expand_len: ?usize) !StringBuilder {
@@ -32,7 +31,6 @@ pub const StringBuilder = struct {
         return .{
             .alloc_option = alloc_option,
             .string = string_alloc,
-            .string_allocations = std.ArrayList(usize).init(allocator),
             .allocator = allocator,
             .position = position,
             .expand_len = expand_len orelse 128,
@@ -41,14 +39,6 @@ pub const StringBuilder = struct {
 
     pub fn deinit(self: *StringBuilder) void {
         self.allocator.free(self.string);
-        for (self.string_allocations.items) |allocation| {
-            // WHY ZIG WHY...
-            // FIX: Change back to the old way by returning a slice and on the stack we state if the string needs to be freed
-            // Instead of having to free all values slices produced by the string builder the string builder
-            // maybe we do free all values from the string builder so maybe a function to state that it needs to be?
-            self.allocator.free(@as(*[]u8, @ptrFromInt(allocation)));
-        }
-        self.string_allocations.deinit();
     }
 
     pub fn expand(self: *StringBuilder, amount_needed: ?usize) !void {
@@ -109,18 +99,17 @@ pub const StringBuilder = struct {
     }
 
     pub fn to_string(self: *StringBuilder) ![]const u8 {
-        //var new_string = try self.allocator.alloc(u8, self.position);
+        return self.string[0..self.position];
+    }
 
-        //for (self.string[0..self.position], 0..) |byte, index| {
-        //    new_string[index] = byte;
-        //}
+    pub fn to_string_alloc(self: *StringBuilder) ![]const u8 {
+        var new_string = try self.allocator.alloc(u8, self.position);
 
-        //const ptn = @intFromPtr(&new_string);
-        //self.string_allocations.push(ptn);
-        const string = try std.fmt.allocPrint(self.allocator, "{s}", .{self.string[0..self.position]});
-        try self.string_allocations.append(@intFromPtr(&string));
+        for (self.string[0..self.position], 0..) |byte, index| {
+            new_string[index] = byte;
+        }
 
-        return string;
+        return new_string;
     }
 };
 
@@ -259,5 +248,29 @@ test "clear StringBuilder" {
     sb.clear();
     try sb.concat_string("bye");
     eql = std.mem.eql(u8, "bye", try sb.to_string());
+    try std.testing.expectEqual(eql, true);
+}
+
+test "to_string_alloc StringBuilder" {
+    const t_alloc = std.testing.allocator;
+
+    var sb =
+        try StringBuilder.init(t_alloc, "", .inc, 5);
+    defer sb.deinit();
+
+    try sb.concat_string("hello");
+    const first_string = try sb.to_string_alloc();
+    defer t_alloc.free(first_string);
+
+    var eql = std.mem.eql(u8, "hello", first_string);
+    try std.testing.expectEqual(eql, true);
+
+    sb.clear();
+
+    try sb.concat_string("bye");
+    const second_string = try sb.to_string_alloc();
+    defer t_alloc.free(second_string);
+
+    eql = std.mem.eql(u8, "bye", second_string);
     try std.testing.expectEqual(eql, true);
 }

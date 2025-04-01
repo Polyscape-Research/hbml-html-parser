@@ -12,6 +12,7 @@ pub const Element = struct {
     parent: ?*Element,
     children: std.ArrayList(Element),
     attrabutes: std.ArrayList(Attrabute),
+    strings_allocated: bool = false,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, identifier: []const u8, parent: ?*Element) !Element {
@@ -39,6 +40,21 @@ pub const Element = struct {
     }
 
     pub fn deinit(self: *Element) void {
+        if (self.strings_allocated) {
+            if (self.identifier.len > 0) {
+                self.allocator.free(self.identifier);
+            }
+
+            for (0..self.attrabutes.items.len) |index| {
+                self.allocator.free(self.attrabutes.items[index].identifier);
+                self.allocator.free(self.attrabutes.items[index].value_text);
+            }
+
+            for (0..self.text.items.len) |index| {
+                self.allocator.free(self.text.items[index].text);
+            }
+        }
+
         for (0..self.children.items.len) |index| {
             var child = self.children.items[index];
             child.deinit();
@@ -74,7 +90,7 @@ pub const Element = struct {
     }
 
     /// Finds the bottom of the tree without regards to termination
-    /// e.g. <div><p> </p></div> would find <p> as div hasnt been terminated yet
+    /// e.g. <div><p> </p></div> would find <p> as its the bottom of the node tree
     pub fn find_bottom_nt(self: *Element) *Element {
         if (self.children.items.len == 0) {
             return self;
@@ -95,7 +111,10 @@ pub const Element = struct {
     }
 };
 
-pub const TextAllocation = struct { text: []const u8, allocated_index: i32 };
+pub const TextAllocation = struct {
+    text: []const u8,
+    allocated_index: i32,
+};
 
 test "Find bottom 1" {
     const allocator = std.testing.allocator;

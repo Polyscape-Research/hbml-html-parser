@@ -30,6 +30,9 @@ const StateMachine = struct {
     current_value_delimiter: u8 = 0x0,
     value_string_builder: sb.StringBuilder,
     string_builder: sb.StringBuilder,
+    dom_node: stack.Element,
+    current_element: *stack.Element = undefined,
+    current_attrabute: ?stack.Attrabute = null,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !StateMachine {
@@ -37,6 +40,7 @@ const StateMachine = struct {
             .allocator = allocator,
             .string_builder = try sb.StringBuilder.init(allocator, "", .multi, null),
             .value_string_builder = try sb.StringBuilder.init(allocator, "", .multi, null),
+            .dom_node = try stack.Element.init(allocator, "dom", null),
         };
     }
 
@@ -49,16 +53,19 @@ const StateMachine = struct {
         return !self.text_block and !self.expect_value and !self.element_decleration and !self.attrabute_decleration and !self.attrabute_value_decleration and !self.element_block;
     }
 
-    pub fn emit_element(self: *StateMachine, current_element: *stack.Element) !stack.Element {
-        const element = try self.string_builder.to_string();
-        std.debug.print("current_element: {s} changing to: {s}\n", .{ current_element.identifier, element });
-        const child = try stack.Element.init_child(element, current_element);
+    pub fn emit_element(self: *StateMachine) !stack.Element {
+        const element = try self.string_builder.to_string_alloc();
+
+        std.debug.print("current_element: {s} changing to: {s}\n", .{ self.dom_node.find_bottom_nt().identifier, element });
+
+        var child = try stack.Element.init_child(element, self.dom_node.find_bottom_nt());
+        child.strings_allocated = true;
         self.string_builder.clear();
         return child;
     }
 
     pub fn emit_attrabute(self: *StateMachine) !stack.Attrabute {
-        const attrabute = try self.string_builder.to_string();
+        const attrabute = try self.string_builder.to_string_alloc();
         self.string_builder.clear();
         return .{ .identifier = attrabute, .value_text = "" };
     }
@@ -72,7 +79,7 @@ const StateMachine = struct {
         var new_attrabute = current_attrabute;
 
         if (new_attrabute != null) {
-            const string: []const u8 = try self.value_string_builder.to_string();
+            const string: []const u8 = try self.value_string_builder.to_string_alloc();
             new_attrabute.?.value_text = string;
             self.string_builder.clear();
         }
@@ -86,20 +93,8 @@ fn allowed_char_check(char: u8) bool {
     return (char >= 0x41 and char <= 0x5A) or (char >= 0x61 and char <= 0x7A);
 }
 
-pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine, allocator: std.mem.Allocator) !stack.Element {
-    var dom = try stack.Element.init(allocator, "dom", null);
-
-    //const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
-    //defer file.close();
-
-    //const file_len = try file.getEndPos();
-    //const file_bytes: []const u8 = try file.readToEndAlloc(allocator, @intCast(file_len));
-    //defer allocator.free(file_bytes);
-
+pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine) !stack.Element {
     var prev_char: ?u8 = undefined;
-
-    var current_element: *stack.Element = &dom;
-    var current_attrabute: ?stack.Attrabute = null;
 
     for (file_bytes, 0..) |char, index| {
         _ = index;
@@ -117,13 +112,12 @@ pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine, allocator
             @branchHint(.likely);
 
             if (state_machine.element_decleration) {
-                var element = try state_machine.emit_element(current_element);
-                try current_element.push_child(element);
-                current_element = &element;
+                const element = try state_machine.emit_element();
+                try state_machine.dom_node.find_bottom_nt().push_child(element);
             } else if (state_machine.attrabute_decleration) {
-                current_attrabute = try state_machine.emit_attrabute();
-                if (current_attrabute != null) {
-                    //try current_element.push_attrabute(current_attrabute.?);
+                state_machine.current_attrabute = try state_machine.emit_attrabute();
+                if (state_machine.current_attrabute != null) {
+                    try state_machine.dom_node.find_bottom_nt().push_attrabute(state_machine.current_attrabute.?);
                 }
             }
 
@@ -135,10 +129,7 @@ pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine, allocator
 
         // Elements
         if (state_machine.element_block and !state_machine.element_decleration and char == '/') {
-            current_element.terminated = true;
-            if (current_element.parent) |parent| {
-                current_element = parent;
-            }
+            state_machine.dom_node.find_bottom_nt().terminated = true;
             continue;
         }
 
@@ -148,9 +139,8 @@ pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine, allocator
         }
 
         if (state_machine.element_decleration and !allowed_char) {
-            var element = try state_machine.emit_element(current_element);
-            try current_element.push_child(element);
-            current_element = &element;
+            const element = try state_machine.emit_element();
+            try state_machine.dom_node.find_bottom_nt().push_child(element);
             state_machine.element_decleration = false;
             continue;
         }
@@ -163,7 +153,7 @@ pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine, allocator
         }
 
         if (state_machine.attrabute_decleration and char == '=') {
-            current_attrabute = stack.Attrabute{ .identifier = try state_machine.string_builder.to_string(), .value_text = "" };
+            state_machine.current_attrabute = stack.Attrabute{ .identifier = try state_machine.string_builder.to_string_alloc(), .value_text = "" };
             state_machine.string_builder.clear();
             state_machine.attrabute_value_decleration = true;
             continue;
@@ -180,10 +170,10 @@ pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine, allocator
         }
 
         if (state_machine.attrabute_value_decleration and state_machine.expect_value and (char == state_machine.current_value_delimiter)) {
-            current_attrabute = try state_machine.emit_attrabute_value(current_attrabute);
+            state_machine.current_attrabute = try state_machine.emit_attrabute_value(state_machine.current_attrabute);
 
-            if (current_attrabute) |attrabute| {
-                try current_element.push_attrabute(attrabute);
+            if (state_machine.current_attrabute) |attrabute| {
+                try state_machine.dom_node.find_bottom_nt().push_attrabute(attrabute);
             }
 
             continue;
@@ -197,26 +187,31 @@ pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine, allocator
         prev_char = char;
     }
 
-    dom.terminated = true;
-
-    return dom;
+    state_machine.dom_node.terminated = true;
+    return state_machine.dom_node;
 }
 
 test "Basic Entry Element Parse" {
     const ts_allocator = std.testing.allocator;
+    var arena = try ts_allocator.create(std.heap.ArenaAllocator);
+    arena.* = std.heap.ArenaAllocator.init(ts_allocator);
 
-    var state_machine = try StateMachine.init(ts_allocator);
-    defer state_machine.deinit();
+    defer {
+        arena.deinit();
+        ts_allocator.destroy(arena);
+    }
 
-    var parsedDom = try parseHtml("<tb><p>", &state_machine, ts_allocator);
-    defer parsedDom.deinit();
+    const allocator = arena.allocator();
+    var state_machine = try StateMachine.init(allocator);
+
+    // TODO Work on how terminated values work and change find_bottom_nt to find_bottom within the parser
+
+    var parsedDom = try parseHtml("<div><p id='a\"x'/>", &state_machine);
+
+    const div = parsedDom.find_bottom();
+    std.debug.print("Bottom: {s} {any}\n", .{ div.identifier, div.terminated });
 
     try std.testing.expect(std.mem.eql(u8, "dom", parsedDom.identifier));
-
     try std.testing.expect(parsedDom.children.items.len > 0);
-
-    const div = parsedDom.find_bottom_nt();
-    std.debug.print("Parent: {s}\n", .{div.parent.?.identifier});
-    std.debug.print("Bottom: {s}\n", .{div.identifier});
     try std.testing.expect(std.mem.eql(u8, div.identifier, "div"));
 }
