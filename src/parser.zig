@@ -27,6 +27,7 @@ const StateMachine = struct {
     attrabute_decleration: bool = false,
     attrabute_value_decleration: bool = false,
     expect_value: bool = false,
+    multi_block_decleration: bool = false,
     current_value_delimiter: u8 = 0x0,
     value_string_builder: sb.StringBuilder,
     string_builder: sb.StringBuilder,
@@ -113,7 +114,14 @@ pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine) !stack.El
 
             if (state_machine.element_decleration) {
                 const element = try state_machine.emit_element();
-                try state_machine.dom_node.find_bottom_nt().push_child(element);
+                if (!state_machine.multi_block_decleration) {
+                    try state_machine.dom_node.find_bottom_nt().push_child(element);
+                } else {
+                    if (std.mem.eql(u8, element.identifier, state_machine.dom_node.find_bottom_nt().identifier)) {
+                        state_machine.dom_node.find_bottom_nt().terminated = true;
+                        state_machine.multi_block_decleration = false;
+                    } else return error.InvalidBreakChar;
+                }
             } else if (state_machine.attrabute_decleration) {
                 state_machine.current_attrabute = try state_machine.emit_attrabute();
                 if (state_machine.current_attrabute != null) {
@@ -133,6 +141,11 @@ pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine) !stack.El
             continue;
         }
 
+        if (state_machine.element_block and state_machine.element_decleration and char == '/') {
+            state_machine.multi_block_decleration = true;
+            continue;
+        }
+
         if (state_machine.element_block and state_machine.element_decleration and allowed_char) {
             try state_machine.string_builder.concat_byte(char);
             continue;
@@ -140,7 +153,15 @@ pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine) !stack.El
 
         if (state_machine.element_decleration and !allowed_char) {
             const element = try state_machine.emit_element();
-            try state_machine.dom_node.find_bottom_nt().push_child(element);
+            if (!state_machine.multi_block_decleration) {
+                try state_machine.dom_node.find_bottom_nt().push_child(element);
+            } else {
+                if (std.mem.eql(u8, element.identifier, state_machine.dom_node.find_bottom_nt().identifier)) {
+                    state_machine.dom_node.find_bottom_nt().terminated = true;
+                    state_machine.multi_block_decleration = false;
+                } else return error.InvalidBreakChar;
+            }
+
             state_machine.element_decleration = false;
             continue;
         }
@@ -206,12 +227,16 @@ test "Basic Entry Element Parse" {
 
     // TODO Work on how terminated values work and change find_bottom_nt to find_bottom within the parser
 
-    var parsedDom = try parseHtml("<div><p id='a\"x'/>", &state_machine);
+    var parsedDom = try parseHtml("<div><p id='a\"x'></p>", &state_machine);
 
     const div = parsedDom.find_bottom();
-    std.debug.print("Bottom: {s} {any}\n", .{ div.identifier, div.terminated });
+    const p = parsedDom.find_bottom_nt();
 
     try std.testing.expect(std.mem.eql(u8, "dom", parsedDom.identifier));
     try std.testing.expect(parsedDom.children.items.len > 0);
     try std.testing.expect(std.mem.eql(u8, div.identifier, "div"));
+    try std.testing.expect(std.mem.eql(u8, p.identifier, "p"));
+    try std.testing.expect(p.attrabutes.items.len > 0);
+    try std.testing.expect(std.mem.eql(u8, p.attrabutes.items[0].value_text, "a\"x"));
+    try std.testing.expect(std.mem.eql(u8, p.attrabutes.items[0].identifier, "id"));
 }
