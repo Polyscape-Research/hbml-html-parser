@@ -202,6 +202,10 @@ pub fn parseHtml(file_bytes: []const u8, state_machine: *StateMachine) !stack.El
 
         if (state_machine.emit_whitespace()) {
             @branchHint(.likely);
+            if (char != '\n' and char != '\t') {
+                state_machine.text_block = true;
+                state_machine.string_builder.concat_byte(char);
+            }
             continue;
         }
 
