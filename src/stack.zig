@@ -5,6 +5,34 @@ pub const Attrabute = struct {
     value_text: []const u8,
 };
 
+pub const Dom = struct {
+    elements: std.MultiArrayList(Element_),
+    // 1: Index of element | 2: Attrabute
+    attrabutes: std.AutoHashMap(u32, Attrabute),
+    // 1: Index of element | 2: TextAllocation
+    text_allocations: std.AutoHashMap(u32, TextAllocation),
+    // 1: Index of element | 2: Identifier String
+    identifiers: std.AutoHashMap(u32, []const u8),
+
+    allocator: std.mem.Allocator,
+
+    pub fn appendElement(self: *Dom, element: *Element_) !u32 {
+        // get new index
+        const next_index = try self.elements.addOne(self.allocator);
+        element.children_index.append(next_index);
+
+        self.elements.insert(self.allocator, next_index, .{ .terminated = false, .parent_index = element.element_index, .element_index = next_index, .children_index = std.ArrayList(u32).init(self.allocator) });
+    }
+};
+
+pub const Element_ = struct {
+    terminated: bool, // 1 + 3 padding
+    parent_index: u32, // 4
+    element_index: u32, // 4
+    // is there a way to remove this list?
+    children_index: std.ArrayList(u32), // ?,
+};
+
 pub const Element = struct {
     identifier: []const u8,
     terminated: bool,
@@ -12,7 +40,6 @@ pub const Element = struct {
     parent: ?*Element,
     children: std.ArrayList(Element),
     attrabutes: std.ArrayList(Attrabute),
-    strings_allocated: bool = false,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, identifier: []const u8, parent: ?*Element) !Element {
@@ -40,20 +67,20 @@ pub const Element = struct {
     }
 
     pub fn deinit(self: *Element) void {
-        if (self.strings_allocated) {
-            if (self.identifier.len > 0) {
-                self.allocator.free(self.identifier);
-            }
+        //if (self.strings_allocated) {
+        //    if (self.identifier.len > 0) {
+        //        self.allocator.free(self.identifier);
+        //    }
 
-            for (0..self.attrabutes.items.len) |index| {
-                self.allocator.free(self.attrabutes.items[index].identifier);
-                self.allocator.free(self.attrabutes.items[index].value_text);
-            }
+        //    for (0..self.attrabutes.items.len) |index| {
+        //        self.allocator.free(self.attrabutes.items[index].identifier);
+        //        self.allocator.free(self.attrabutes.items[index].value_text);
+        //    }
 
-            for (0..self.text.items.len) |index| {
-                self.allocator.free(self.text.items[index].text);
-            }
-        }
+        //    for (0..self.text.items.len) |index| {
+        //        self.allocator.free(self.text.items[index].text);
+        //    }
+        //}
 
         for (0..self.children.items.len) |index| {
             var child = self.children.items[index];
@@ -111,9 +138,10 @@ pub const Element = struct {
     }
 };
 
+// TODO look into if we really need allocated_index or if it can be calculated
 pub const TextAllocation = struct {
     text: []const u8,
-    allocated_index: i32,
+    allocated_index: u32,
 };
 
 test "Find bottom 1" {
