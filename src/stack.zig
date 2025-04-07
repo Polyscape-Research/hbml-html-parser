@@ -13,20 +13,40 @@ pub const Dom = struct {
     text_allocations: std.AutoHashMap(u32, TextAllocation),
     // 1: Index of element | 2: Identifier String
     identifiers: std.AutoHashMap(u32, []const u8),
-
     allocator: std.mem.Allocator,
 
-    pub fn appendElement(self: *Dom, element: *Element_) !u32 {
+    pub fn appendElement(self: *Dom, element: *Element_, identifier: []const u8) !void {
         // get new index
         const next_index = try self.elements.addOne(self.allocator);
         element.children_index.append(next_index);
 
         self.elements.insert(self.allocator, next_index, .{ .terminated = false, .parent_index = element.element_index, .element_index = next_index, .children_index = std.ArrayList(u32).init(self.allocator) });
+
+        try self.identifiers.put(next_index, identifier);
+    }
+
+    pub fn appendAttrabute(self: *Dom, attrabute: Attrabute, element_index: u32) !void {
+        try self.attrabutes.put(element_index, attrabute);
+    }
+
+    pub fn find_bottom(self: *Dom) !*Element_ {
+        const index: usize = 0;
+        for (self.elements.items(.terminated)) |terminated| {
+            if (terminated == true) break;
+            index += 1;
+        }
+
+        return &self.elements.get(index);
+    }
+
+    pub fn set_element(self: *Dom, element: Element_) !void {
+        self.elements.set(element.element_index, element);
     }
 };
 
 pub const Element_ = struct {
-    terminated: bool, // 1 + 3 padding
+    // no padding as we are using a MultiArrayList
+    terminated: bool, // 1
     parent_index: u32, // 4
     element_index: u32, // 4
     // is there a way to remove this list?
