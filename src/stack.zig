@@ -15,12 +15,33 @@ pub const Dom = struct {
     identifiers: std.AutoHashMap(u32, []const u8),
     allocator: std.mem.Allocator,
 
+    pub fn init(allocator: std.mem.Allocator) Dom {
+        return .{ .elements = std.MultiArrayList(Element_){}, .attrabutes = std.AutoHashMap(u32, Attrabute).init(allocator), .text_allocations = std.AutoHashMap(u32, TextAllocation).init(allocator), .identifiers = std.AutoHashMap(u32, []const u8).init(allocator), .allocator = allocator };
+    }
+
+    pub fn deinit(self: *Dom) void {
+        self.attrabutes.deinit();
+        self.text_allocations.deinit();
+        self.identifiers.deinit();
+        self.elements.deinit(self.allocator);
+    }
+
+    pub fn appendTopElement(self: *Dom, element: *Element_, identifier: []const u8) !void {
+        const next_index: u32 = @intCast(try self.elements.addOne(self.allocator));
+
+        element.element_index = next_index;
+
+        try self.elements.insert(self.allocator, next_index, element.*);
+
+        try self.identifiers.put(next_index, identifier);
+    }
+
     pub fn appendElement(self: *Dom, element: *Element_, identifier: []const u8) !void {
         // get new index
-        const next_index = try self.elements.addOne(self.allocator);
-        element.children_index.append(next_index);
+        const next_index: u32 = @intCast(try self.elements.addOne(self.allocator));
+        try element.children_index.append(next_index);
 
-        self.elements.insert(self.allocator, next_index, .{ .terminated = false, .parent_index = element.element_index, .element_index = next_index, .children_index = std.ArrayList(u32).init(self.allocator) });
+        try self.elements.insert(self.allocator, next_index, .{ .terminated = false, .parent_index = element.element_index, .element_index = next_index, .children_index = std.ArrayList(u32).init(self.allocator) });
 
         try self.identifiers.put(next_index, identifier);
     }
@@ -29,14 +50,14 @@ pub const Dom = struct {
         try self.attrabutes.put(element_index, attrabute);
     }
 
-    pub fn find_bottom(self: *Dom) !*Element_ {
-        const index: usize = 0;
-        for (self.elements.items(.terminated)) |terminated| {
-            if (terminated == true) break;
-            index += 1;
-        }
+    pub fn find_bottom(self: *Dom) *Element_ {
+        const items = self.elements.items(.terminated);
+        const vector_items: @Vector(items.len, bool) = items;
+        const vector_find: @Vector(items.len, bool) = @splat(false);
 
-        return &self.elements.get(index);
+        const matches = vector_items == vector_find;
+
+        return &self.elements.get(std.simd.firstTrue(matches));
     }
 
     pub fn set_element(self: *Dom, element: Element_) !void {
@@ -163,6 +184,24 @@ pub const TextAllocation = struct {
     text: []const u8,
     allocated_index: u32,
 };
+
+test "Find bottom (dod) 1" {
+    const allocator = std.testing.allocator;
+
+    var dom = Dom.init(allocator);
+    defer dom.deinit();
+
+    var div: Element_ = .{ .children_index = std.ArrayList(u32).init(allocator), .element_index = 0, .parent_index = 0, .terminated = true };
+    defer div.children_index.deinit();
+
+    try dom.appendTopElement(&div, "div");
+    try dom.appendElement(&div, "p");
+
+    const element = dom.find_bottom();
+    const id = dom.identifiers.get(element.element_index).?;
+
+    std.debug.print("{s}\n", .{id});
+}
 
 test "Find bottom 1" {
     const allocator = std.testing.allocator;
