@@ -56,8 +56,6 @@ pub const Dom = struct {
     pub fn find_bottom(self: *Dom) Element_ {
         const items = self.elements.items(.terminated);
 
-        std.debug.print("items: {any}\n", .{items});
-
         var index: usize = 0;
 
         // 16 bytes is 128 bits and 1 bool is 1 byte
@@ -70,8 +68,6 @@ pub const Dom = struct {
             const batch = items.len / vector_size_bool;
             var i: usize = 0;
 
-            std.debug.print("batch: {d}\n", .{batch});
-
             while (i < batch) : (i += 1) {
                 const offset = i * vector_size_bool;
 
@@ -83,8 +79,6 @@ pub const Dom = struct {
                 @memcpy(input_v_ptr, input_d_ptr);
 
                 const match: @Vector(vector_size_bool, bool) = input_vector == comp_vector_btm;
-
-                std.debug.print("Input: {any}\nComp_: {any}\nOutpt: {any}\n", .{ input_vector, comp_vector_btm, match });
 
                 index = @intCast(std.simd.lastTrue(match) orelse index);
             }
@@ -119,7 +113,7 @@ pub const Element_ = struct {
     children_index: std.ArrayList(u32), // ?,
 };
 
-test "Find bottom (dod) 1" {
+test "Find bottom (dod + simd) 1" {
     const allocator = std.testing.allocator;
 
     var dom = Dom.init(allocator);
@@ -137,10 +131,11 @@ test "Find bottom (dod) 1" {
     try dom.set_terminated(&last);
 
     const element = dom.find_bottom();
-    std.debug.print("index {d}\n", .{element.element_index});
+
     const id = dom.identifiers.get(element.element_index).?;
 
-    std.debug.print("{s}\n", .{id});
+    std.testing.expect(element.element_index == 15);
+    std.testing.expect(std.mem.eql(u8, "p", id));
 }
 
 pub const Element = struct {
