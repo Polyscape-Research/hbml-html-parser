@@ -1,5 +1,8 @@
 const std = @import("std");
 
+const vector_size_bool = 16;
+const comp_vector_btm: @Vector(vector_size_bool, bool) = @splat(false);
+
 pub const Attrabute = struct {
     identifier: []const u8,
     value_text: []const u8,
@@ -27,21 +30,21 @@ pub const Dom = struct {
     }
 
     pub fn appendTopElement(self: *Dom, element: *Element_, identifier: []const u8) !void {
-        const next_index: u32 = @intCast(try self.elements.addOne(self.allocator));
+        const next_index: u32 = @intCast(self.elements.len);
 
         element.element_index = next_index;
 
-        try self.elements.insert(self.allocator, next_index, element.*);
+        try self.elements.append(self.allocator, element.*);
 
         try self.identifiers.put(next_index, identifier);
     }
 
     pub fn appendElement(self: *Dom, element: *Element_, identifier: []const u8) !void {
         // get new index
-        const next_index: u32 = @intCast(try self.elements.addOne(self.allocator));
+        const next_index: u32 = @intCast(self.elements.len);
         try element.children_index.append(next_index);
 
-        try self.elements.insert(self.allocator, next_index, .{ .terminated = false, .parent_index = element.element_index, .element_index = next_index, .children_index = std.ArrayList(u32).init(self.allocator) });
+        try self.elements.append(self.allocator, .{ .terminated = false, .parent_index = element.element_index, .element_index = next_index, .children_index = std.ArrayList(u32).init(self.allocator) });
 
         try self.identifiers.put(next_index, identifier);
     }
@@ -50,18 +53,60 @@ pub const Dom = struct {
         try self.attrabutes.put(element_index, attrabute);
     }
 
-    pub fn find_bottom(self: *Dom) *Element_ {
+    pub fn find_bottom(self: *Dom) Element_ {
         const items = self.elements.items(.terminated);
-        const vector_items: @Vector(items.len, bool) = items;
-        const vector_find: @Vector(items.len, bool) = @splat(false);
 
-        const matches = vector_items == vector_find;
+        std.debug.print("items: {any}\n", .{items});
 
-        return &self.elements.get(std.simd.firstTrue(matches));
+        var index: usize = 0;
+
+        // 16 bytes is 128 bits and 1 bool is 1 byte
+        if (items.len < vector_size_bool) {
+            for (items, 0..) |value, idx| {
+                if (value == false) index = idx;
+            }
+        } else {
+            const mod = items.len % vector_size_bool;
+            const batch = items.len / vector_size_bool;
+            var i: usize = 0;
+
+            std.debug.print("batch: {d}\n", .{batch});
+
+            while (i < batch) : (i += 1) {
+                const offset = i * vector_size_bool;
+
+                var input_vector: @Vector(vector_size_bool, bool) = undefined;
+
+                const input_v_ptr: *[vector_size_bool]bool = @ptrCast(&input_vector);
+                const input_d_ptr: *[vector_size_bool]bool = @ptrCast(items.ptr + offset);
+
+                @memcpy(input_v_ptr, input_d_ptr);
+
+                const match: @Vector(vector_size_bool, bool) = input_vector == comp_vector_btm;
+
+                std.debug.print("Input: {any}\nComp_: {any}\nOutpt: {any}\n", .{ input_vector, comp_vector_btm, match });
+
+                index = @intCast(std.simd.lastTrue(match) orelse index);
+            }
+
+            // goes over remainders
+            if (mod > 0) {
+                for (batch * vector_size_bool..items.len) |idx| {
+                    if (items[idx] == false) index = idx;
+                }
+            }
+        }
+
+        return self.elements.get(index);
     }
 
     pub fn set_element(self: *Dom, element: Element_) !void {
         self.elements.set(element.element_index, element);
+    }
+
+    pub fn set_terminated(self: *Dom, element: *Element_) !void {
+        element.terminated = true;
+        self.elements.set(element.element_index, element.*);
     }
 };
 
@@ -73,6 +118,30 @@ pub const Element_ = struct {
     // is there a way to remove this list?
     children_index: std.ArrayList(u32), // ?,
 };
+
+test "Find bottom (dod) 1" {
+    const allocator = std.testing.allocator;
+
+    var dom = Dom.init(allocator);
+    defer dom.deinit();
+
+    var div: Element_ = .{ .children_index = std.ArrayList(u32).init(allocator), .element_index = 0, .parent_index = 0, .terminated = true };
+    defer div.children_index.deinit();
+
+    try dom.appendTopElement(&div, "div");
+    for (0..16) |_| {
+        try dom.appendElement(&div, "p");
+    }
+
+    var last = dom.elements.get(dom.elements.len - 1);
+    try dom.set_terminated(&last);
+
+    const element = dom.find_bottom();
+    std.debug.print("index {d}\n", .{element.element_index});
+    const id = dom.identifiers.get(element.element_index).?;
+
+    std.debug.print("{s}\n", .{id});
+}
 
 pub const Element = struct {
     identifier: []const u8,
@@ -184,24 +253,6 @@ pub const TextAllocation = struct {
     text: []const u8,
     allocated_index: u32,
 };
-
-test "Find bottom (dod) 1" {
-    const allocator = std.testing.allocator;
-
-    var dom = Dom.init(allocator);
-    defer dom.deinit();
-
-    var div: Element_ = .{ .children_index = std.ArrayList(u32).init(allocator), .element_index = 0, .parent_index = 0, .terminated = true };
-    defer div.children_index.deinit();
-
-    try dom.appendTopElement(&div, "div");
-    try dom.appendElement(&div, "p");
-
-    const element = dom.find_bottom();
-    const id = dom.identifiers.get(element.element_index).?;
-
-    std.debug.print("{s}\n", .{id});
-}
 
 test "Find bottom 1" {
     const allocator = std.testing.allocator;
