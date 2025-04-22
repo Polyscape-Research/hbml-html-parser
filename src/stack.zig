@@ -33,9 +33,7 @@ pub const Dom = struct {
         const next_index: u32 = @intCast(self.elements.len);
 
         element.element_index = next_index;
-
         try self.elements.append(self.allocator, element.*);
-
         try self.identifiers.put(next_index, identifier);
     }
 
@@ -134,8 +132,8 @@ test "Find bottom (dod + simd) 1" {
 
     const id = dom.identifiers.get(element.element_index).?;
 
-    std.testing.expect(element.element_index == 15);
-    std.testing.expect(std.mem.eql(u8, "p", id));
+    try std.testing.expect(element.element_index == 15);
+    try std.testing.expect(std.mem.eql(u8, "p", id));
 }
 
 pub const Element = struct {
