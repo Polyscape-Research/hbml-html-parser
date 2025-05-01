@@ -1,9 +1,12 @@
 #include "simd.h"
 #include <stdalign.h>
 #include <stdio.h>
-#include <immintrin.h>
 
 #define SIZE 1024 
+
+#if defined(__x86_64__) || defined(_M_X64)
+#include <immintrin.h>
+
 
 alignas(16) float in[SIZE];
 alignas(16) float comp[SIZE];
@@ -18,3 +21,4 @@ int find_bottom_simd(float a[], int b) {
     return 1;
 }
 
+#endif
