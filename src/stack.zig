@@ -1,7 +1,10 @@
 const std = @import("std");
+//const c = @cImport({
+//    @cInclude("c/simd.h");
+//});
 
 const vector_size_bool = 16;
-const comp_vector_btm: @Vector(vector_size_bool, bool) = @splat(false);
+const comp_vector_btm: @Vector(vector_size_bool, u8) = @splat(0);
 
 pub const Attrabute = struct {
     identifier: []const u8,
@@ -37,7 +40,7 @@ pub const Dom = struct {
         try self.identifiers.put(next_index, identifier);
     }
 
-    pub fn appendElement(self: *Dom, element: *Element_, identifier: []const u8) !void {
+    pub fn appendElement(self: *Dom, element: *Element_, identifier: []const u8) !u32 {
         // get new index
         const next_index: u32 = @intCast(self.elements.len);
         try element.children_index.append(next_index);
@@ -45,6 +48,8 @@ pub const Dom = struct {
         try self.elements.append(self.allocator, .{ .terminated = false, .parent_index = element.element_index, .element_index = next_index, .children_index = std.ArrayList(u32).init(self.allocator) });
 
         try self.identifiers.put(next_index, identifier);
+
+        return next_index;
     }
 
     pub fn appendAttrabute(self: *Dom, attrabute: Attrabute, element_index: u32) !void {
@@ -58,6 +63,7 @@ pub const Dom = struct {
 
         // 16 bytes is 128 bits and 1 bool is 1 byte
         if (items.len < vector_size_bool) {
+            @branchHint(.unlikely);
             for (items, 0..) |value, idx| {
                 if (value == false) index = idx;
             }
@@ -69,12 +75,15 @@ pub const Dom = struct {
             while (i < batch) : (i += 1) {
                 const offset = i * vector_size_bool;
 
-                var input_vector: @Vector(vector_size_bool, bool) = undefined;
+                var input_vector: @Vector(vector_size_bool, u8) = undefined;
 
                 // TODO seg fault on mac os when running this at address 0x0 most likly something to do with the simd registers and the aligned bytes
-                const input_v_ptr: *[vector_size_bool]bool = @ptrCast(&input_vector);
-                const input_d_ptr: *[vector_size_bool]bool = @ptrCast(items.ptr + offset);
+                // Not sure if this is fixed yet
+                const input_v_ptr: *[vector_size_bool]u8 = @ptrCast(@alignCast(&input_vector));
+                const input_d_ptr: *[vector_size_bool]u8 = @ptrCast(@alignCast(items.ptr + offset));
 
+                // Should copy the memory  in one instruction so for each 16 comparisions there is the SIMD instruction and the copy instruction
+                // Though this might need some beanchmarking still
                 @memcpy(input_v_ptr, input_d_ptr);
 
                 const match: @Vector(vector_size_bool, bool) = input_vector == comp_vector_btm;
@@ -116,10 +125,11 @@ pub const Element_ = struct {
 test "Find bottom (dod + simd) 1" {
     const allocator = std.testing.allocator;
 
-    const test2 = @alignOf(@Vector(16, bool));
-    const test1 = @alignOf(@Vector(16, u8));
-
-    std.debug.print("Test: {d}, {d}, {d}\n", .{ test1, test2, @sizeOf(bool) });
+    //    const a: c_int = 2;
+    //    const b: c_int = 2;
+    //
+    //    const add: c_int = c.find_bottom_simd(a, b);
+    //    std.debug.print("{d}", .{add});
 
     var dom = Dom.init(allocator);
     defer dom.deinit();
@@ -129,17 +139,39 @@ test "Find bottom (dod + simd) 1" {
 
     try dom.appendTopElement(&div, "div");
     for (0..16) |_| {
-        try dom.appendElement(&div, "p");
+        _ = try dom.appendElement(&div, "p");
     }
 
     var last = dom.elements.get(dom.elements.len - 1);
     try dom.set_terminated(&last);
-    _ = dom.find_bottom();
-    //
-    //    const id = dom.identifiers.get(element.element_index).?;
-    //
-    //    try std.testing.expect(element.element_index == 15);
-    //    try std.testing.expect(std.mem.eql(u8, "p", id));
+    const element = dom.find_bottom();
+
+    const id = dom.identifiers.get(element.element_index).?;
+    try std.testing.expect(element.element_index == 15);
+    try std.testing.expect(std.mem.eql(u8, "p", id));
+}
+
+test "Find bottom (dod + simd) 2" {
+    const allocator = std.testing.allocator;
+
+    var dom = Dom.init(allocator);
+    defer dom.deinit();
+
+    var div: Element_ = .{ .children_index = std.ArrayList(u32).init(allocator), .element_index = 0, .parent_index = 0, .terminated = true };
+    defer div.children_index.deinit();
+
+    try dom.appendTopElement(&div, "div");
+    const p_index = try dom.appendElement(&div, "p");
+
+    var p_element = dom.elements.get(p_index);
+    _ = try dom.appendElement(&p_element, "span");
+    defer p_element.children_index.deinit();
+
+    const element = dom.find_bottom();
+
+    const id = dom.identifiers.get(element.element_index).?;
+    //try std.testing.expect(element.element_index == 15);
+    try std.testing.expect(std.mem.eql(u8, "span", id));
 }
 
 pub const Element = struct {
