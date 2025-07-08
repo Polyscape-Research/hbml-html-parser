@@ -5,6 +5,11 @@ pub fn build(b: *std.Build) void {
 
     const optimize = b.standardOptimizeOption(.{});
 
+    const simd = b.option(bool, "simd", "Enables/disables support for SIMD algors") orelse false;
+
+    const options = b.addOptions();
+    options.addOption(bool, "simd", simd);
+
     //    const lib_mod = b.createModule(.{
     //        .root_source_file = b.path("src/root.zig"),
     //        .target = target,
@@ -32,11 +37,9 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
     });
 
-    exe.addIncludePath(b.path("src"));
-    exe.addCSourceFile(.{ .file = b.path("src/c/simd.c"), .flags = &.{"-Wall"}, .language = .c });
-    exe.linkLibC();
+    exe.root_module.addOptions("build_options", options);
 
-    b.installArtifact(exe);
+    exe.addIncludePath(b.path("src"));
 
     const run_cmd = b.addRunArtifact(exe);
 
@@ -50,11 +53,14 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const stack_tests = b.addTest(.{ .root_source_file = b.path("./src/stack.zig") });
+    stack_tests.root_module.addOptions("build_options", options);
     stack_tests.addIncludePath(b.path("src"));
-    stack_tests.addCSourceFile(.{ .file = b.path("src/c/simd.c"), .flags = &.{"-Wall"}, .language = .c });
-    stack_tests.linkLibC();
+    const parser_tests = b.addTest(.{ .root_source_file = b.path("./src/parser.zig") });
+    parser_tests.root_module.addOptions("build_options", options);
+    parser_tests.addIncludePath(b.path("src"));
 
     const run_stack_tests = b.addRunArtifact(stack_tests);
+    //const run_parser_tests = b.addRunArtifact(parser_tests);
     //    const lib_unit_tests = b.addTest(.{
     //        .root_module = lib_mod,
     //   });
@@ -65,9 +71,9 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
     });
 
+    exe_unit_tests.root_module.addOptions("build_options", options);
+
     exe_unit_tests.addIncludePath(b.path("src"));
-    exe_unit_tests.addCSourceFile(.{ .file = b.path("src/c/simd.c"), .flags = &.{"-Wall"}, .language = .c });
-    exe_unit_tests.linkLibC();
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 

@@ -1,7 +1,5 @@
 const std = @import("std");
-//const c = @cImport({
-//    @cInclude("c/simd.h");
-//});
+const build_options = @import("build_options");
 
 const vector_size_bool = 16;
 const comp_vector_btm: @Vector(vector_size_bool, u8) = @splat(0);
@@ -60,6 +58,14 @@ pub const Dom = struct {
         const items = self.elements.items(.terminated);
 
         var index: usize = 0;
+
+        if (!build_options.simd) {
+            for (items, 0..) |value, idx| {
+                if (value == false) index = idx;
+            }
+
+            return self.elements.get(index);
+        }
 
         // 16 bytes is 128 bits and 1 bool is 1 byte
         if (items.len < vector_size_bool) {
@@ -125,12 +131,6 @@ pub const Element_ = struct {
 test "Find bottom (dod + simd) 1" {
     const allocator = std.testing.allocator;
 
-    //    const a: c_int = 2;
-    //    const b: c_int = 2;
-    //
-    //    const add: c_int = c.find_bottom_simd(a, b);
-    //    std.debug.print("{d}", .{add});
-
     var dom = Dom.init(allocator);
     defer dom.deinit();
 
@@ -170,7 +170,6 @@ test "Find bottom (dod + simd) 2" {
     const element = dom.find_bottom();
 
     const id = dom.identifiers.get(element.element_index).?;
-    //try std.testing.expect(element.element_index == 15);
     try std.testing.expect(std.mem.eql(u8, "span", id));
 }
 

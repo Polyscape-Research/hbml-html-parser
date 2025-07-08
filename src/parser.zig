@@ -56,8 +56,7 @@ const StateMachine = struct {
 
         std.debug.print("current_element: {s} changing to: {s}\n", .{ self.dom_node.find_bottom().identifier, element });
 
-        var child = try stack.Element.init_child(element, self.dom_node.find_bottom());
-        child.strings_allocated = true;
+        const child = try stack.Element.init_child(element, self.dom_node.find_bottom());
         self.string_builder.clear();
         return child;
     }
